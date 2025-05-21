@@ -1,8 +1,12 @@
-import br.edu.uaifood.orders.domain.Order
+package br.edu.uaifood.orders.domain
+
+import br.edu.uaifood.orders.domain.model.Order
 import br.edu.uaifood.orders.repository.payment.entity.PaymentEntity
+import java.util.UUID
 
 data class Payment(
-    val order: Order?,
+    val id: UUID = UUID.randomUUID(),
+    val orderId: UUID,
     val status: PaymentStatus,
     val paymentId: String?,
     val amount: Double,
@@ -11,7 +15,8 @@ data class Payment(
     companion object {
         fun from(paymentPersisted: PaymentEntity): Payment =
             Payment(
-                order = if (paymentPersisted.order != null ) Order.from(paymentPersisted.order!!) else null,
+                id = paymentPersisted.id,
+                orderId = paymentPersisted.orderId,
                 status = paymentPersisted.status,
                 paymentId = paymentPersisted.paymentId,
                 amount = paymentPersisted.amount,

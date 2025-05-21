@@ -1,171 +1,164 @@
 package br.edu.uaifood.orders.controller
 
-
-import br.edu.uaifood.orders.controller.order.dto.OrderRequest
-import br.edu.uaifood.orders.domain.Order
-import br.edu.uaifood.orders.domain.OrderStatus
-import br.edu.uaifood.orders.repository.order.OrderRepository
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
-import br.edu.uaifood.orders.repository.payment.PaymentRepository
-import br.edu.uaifood.orders.repository.payment.entity.PaymentEntity
-import br.edu.uaifood.orders.repository.product.entity.ProductEntity
-import br.edu.uaifood.orders.service.CheckoutService
-import br.edu.uaifood.orders.service.OrderService
-import br.edu.uaifood.orders.usecase.FindProductsByIdsUseCase
-import br.edu.uaifood.orders.usecase.GenerateQrCodeUseCase
-import br.edu.uaifood.orders.util.JsonReader
-import com.ninjasquad.springmockk.MockkBean
-import com.ninjasquad.springmockk.SpykBean
-import io.github.glytching.junit.extension.random.Random
-import io.github.glytching.junit.extension.random.RandomBeansExtension
+import br.edu.uaifood.orders.controller.order.dto.CreateOrderRequest
+import br.edu.uaifood.orders.controller.order.dto.OrderItemRequest
+import br.edu.uaifood.orders.controller.order.dto.OrderResponse
+import br.edu.uaifood.orders.domain.model.Order
+import br.edu.uaifood.orders.domain.model.OrderItem
+import br.edu.uaifood.orders.domain.model.OrderStatus
+import br.edu.uaifood.orders.usecase.CreateOrderUseCase
+import br.edu.uaifood.orders.usecase.FindAllOrdersUseCase
+import br.edu.uaifood.orders.usecase.FindOrderByIdUseCase
+import br.edu.uaifood.orders.usecase.UpdateOrderStatusUseCase
 import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.Runs
+import io.mockk.verify
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.MediaType.APPLICATION_JSON
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
+import org.springframework.http.HttpStatus
 import java.time.LocalDateTime
+import java.util.*
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-@AutoConfigureMockMvc
-@SpringBootTest
-@ExtendWith(RandomBeansExtension::class)
-class OrderControllerTest(
-    @Autowired
-    private val mockMvc: MockMvc,
-    @Autowired
-    private val jsonReader: JsonReader
-) {
-    @MockkBean
-    private lateinit var orderRepository: OrderRepository
+class OrderControllerTest {
+    private val createOrderUseCase: CreateOrderUseCase = mockk()
+    private val findAllOrdersUseCase: FindAllOrdersUseCase = mockk()
+    private val findOrderByIdUseCase: FindOrderByIdUseCase = mockk()
+    private val updateOrderStatusUseCase: UpdateOrderStatusUseCase = mockk()
+    
+    private val orderController = OrderController(
+        createOrderUseCase,
+        findAllOrdersUseCase,
+        findOrderByIdUseCase,
+        updateOrderStatusUseCase
+    )
 
-    @SpykBean
-    private lateinit var orderService: OrderService
+    private lateinit var order: Order
+    private lateinit var orderItem: OrderItem
 
-    @MockkBean
-    private lateinit var checkoutService: CheckoutService
-
-    @MockkBean
-    private lateinit var findProductsByIdsUseCase: FindProductsByIdsUseCase
-
-    @MockkBean
-    private lateinit var generateQrCodeUseCase: GenerateQrCodeUseCase
-
-    @MockkBean
-    private lateinit var paymentRepository: PaymentRepository
-
-    @Test
-    fun `should find all orders`(@Random randomProduct: ProductEntity) {
-        // Given
-        val firstOrder = OrderEntity(1, listOf(randomProduct.copy(category = "DESSERT")),
-            OrderStatus.FINISHED,  LocalDateTime.parse("2023-06-20T07:12:10.02"), null)
-        val secondOrder = OrderEntity(2, listOf(randomProduct.copy(category = "DRINK")),
-            OrderStatus.READY, LocalDateTime.parse("2023-12-23T19:34:50.63"), null)
-
-        // When
-        every { orderRepository.findAll() } returns listOf(firstOrder, secondOrder)
-
-        mockMvc.perform(
-            get("/v1/orders")
+    @BeforeEach
+    fun setup() {
+        orderItem = OrderItem(
+            productId = UUID.randomUUID(),
+            quantity = 2,
+            price = 10.0
         )
-
-        // Then
-        .andExpect(status().isOk)
-        .andExpect(content().contentType(APPLICATION_JSON))
-        .andExpect(jsonPath("$.[0].status").value("READY"))
-        .andExpect(jsonPath("$.[0].products[0].name").value(randomProduct.name))
-        .andExpect(jsonPath("$.[0].creation_date").value("2023-12-23T19:34:50.630"))
+        
+        order = Order(
+            customerId = "customer123",
+            restaurantId = "restaurant456",
+            items = listOf(orderItem),
+            status = OrderStatus.CREATED,
+            totalAmount = 20.0,
+            createdAt = LocalDateTime.now(),
+            updatedAt = LocalDateTime.now()
+        )
     }
 
     @Test
-    fun `should save a order successfully`(
-        @Random paymentPersisted: PaymentEntity,
-        @Random productPersisted: ProductEntity
-    ) {
+    fun `should create order successfully`() {
         // Given
-        val orderRequest = jsonReader.import("order_request_ok.json")
-        val orderPersisted = OrderEntity.from(
-            Order.from(
-                jsonReader.importClass("order_request_ok.json", OrderRequest::class.java),
-                null
+        val request = CreateOrderRequest(
+            customerId = "customer123",
+            restaurantId = "restaurant456",
+            items = listOf(
+                OrderItemRequest(
+                    productId = orderItem.productId,
+                    quantity = orderItem.quantity,
+                    price = orderItem.price
+                )
             )
         )
-
-        paymentPersisted.status = PaymentStatus.PENDING;
+        val savedOrder = order.copy(id = UUID.randomUUID())
+        
+        every { createOrderUseCase.execute(any()) } returns savedOrder
 
         // When
-        every { orderRepository.save(any()) } returns orderPersisted
-        every { checkoutService.fakeCheckout() } returns true
-        every { paymentRepository.save(any()) } returns paymentPersisted
-        every { generateQrCodeUseCase.execute(any()) } returns ""
-        every { checkoutService.fakeCheckout() } returns true
-        every { findProductsByIdsUseCase.execute(any()) } returns listOf(productPersisted.copy(category = "DESSERT"))
+        val response = orderController.createOrder(request)
 
-
-        mockMvc.perform(
-            post("/v1/orders")
-                .content(orderRequest)
-                .contentType(APPLICATION_JSON)
-        )
-            // Then
-            .andExpect(status().isCreated)
-            .andExpect(content().contentType(APPLICATION_JSON))
-            .andExpect(jsonPath("$.status").value("WAITING_PAYMENT"))
+        // Then
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val responseBody = response.body!!
+        assertEquals(savedOrder.id, responseBody.id)
+        assertEquals(savedOrder.customerId, responseBody.customerId)
+        assertEquals(savedOrder.restaurantId, responseBody.restaurantId)
+        assertEquals(1, responseBody.items.size)
+        assertEquals(orderItem.productId, responseBody.items[0].productId)
+        assertEquals(orderItem.quantity, responseBody.items[0].quantity)
+        assertEquals(orderItem.price, responseBody.items[0].price)
+        verify { createOrderUseCase.execute(any()) }
     }
 
     @Test
-    fun `should save a order with Cpf if customer choose to identify via Cpf`(
-        @Random productPersisted: ProductEntity,
-        @Random paymentPersisted: PaymentEntity
-    ) {
+    fun `should find all orders`() {
         // Given
-        val orderRequest = jsonReader.import("order_request_ok.json")
-        val orderPersisted = OrderEntity.from(
-            Order.from(
-                jsonReader.importClass("order_request_ok.json", OrderRequest::class.java),
-                "910.933.630-37"
-            )
-        )
+        val order1 = order.copy(id = UUID.randomUUID())
+        val order2 = order.copy(id = UUID.randomUUID())
+        
+        every { findAllOrdersUseCase.execute() } returns listOf(order1, order2)
 
         // When
-        every { orderRepository.save(any()) } returns orderPersisted
-        every { checkoutService.fakeCheckout() } returns true
-        every { generateQrCodeUseCase.execute(any()) } returns ""
-        every { findProductsByIdsUseCase.execute(any()) } returns listOf(productPersisted.copy(category = "DESSERT"))
-        every { paymentRepository.save(any()) } returns paymentPersisted
+        val response = orderController.findAllOrders()
 
-        mockMvc.perform(
-            post("/v1/orders?cpf=910.933.630-37")
-                .content(orderRequest)
-                .contentType(APPLICATION_JSON)
-        )
         // Then
-            .andExpect(status().isCreated)
-            .andExpect(content().contentType(APPLICATION_JSON))
-            .andExpect(jsonPath("$.status").value("WAITING_PAYMENT"))
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val responseBody = response.body!!
+        assertEquals(2, responseBody.size)
+        assertTrue(responseBody.any { it.id == order1.id })
+        assertTrue(responseBody.any { it.id == order2.id })
+        verify { findAllOrdersUseCase.execute() }
     }
 
-
-    //@Test
-    fun `should not save a order if payment is not confirmed`() {
+    @Test
+    fun `should find order by id`() {
         // Given
-        val orderRequest = jsonReader.import("order_request_ok.json")
+        val orderId = UUID.randomUUID()
+        val orderToFind = order.copy(id = orderId)
+        
+        every { findOrderByIdUseCase.execute(orderId) } returns orderToFind
 
         // When
-        every { checkoutService.fakeCheckout() } returns false
-        mockMvc.perform(
-            post("/v1/orders")
-                .content(orderRequest)
-                .contentType(APPLICATION_JSON)
-        )
-            // Then
-            .andExpect(status().isBadRequest)
-            .andExpect(content().contentType(APPLICATION_JSON))
-            .andExpect(jsonPath("$.status_code").value(400))
-            .andExpect(jsonPath("$.message").value("There was a problem with payment and the order was not received"))
+        val response = orderController.findOrderById(orderId)
+
+        // Then
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val responseBody = response.body!!
+        assertEquals(orderId, responseBody.id)
+        assertEquals(orderToFind.customerId, responseBody.customerId)
+        assertEquals(orderToFind.restaurantId, responseBody.restaurantId)
+        assertEquals(1, responseBody.items.size)
+        assertEquals(orderItem.productId, responseBody.items[0].productId)
+        assertEquals(orderItem.quantity, responseBody.items[0].quantity)
+        assertEquals(orderItem.price, responseBody.items[0].price)
+        verify { findOrderByIdUseCase.execute(orderId) }
     }
-}
+
+    @Test
+    fun `should update order status`() {
+        // Given
+        val orderId = UUID.randomUUID()
+        val updatedOrder = order.copy(
+            id = orderId,
+            status = OrderStatus.PENDING_PAYMENT
+        )
+        
+        every { updateOrderStatusUseCase.execute(orderId) } just Runs
+        every { findOrderByIdUseCase.execute(orderId) } returns updatedOrder
+
+        // When
+        val response = orderController.updateOrderStatus(orderId)
+
+        // Then
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val responseBody = response.body!!
+        assertEquals(orderId, responseBody.id)
+        assertEquals(OrderStatus.PENDING_PAYMENT, responseBody.status)
+        verify { 
+            updateOrderStatusUseCase.execute(orderId)
+            findOrderByIdUseCase.execute(orderId)
+        }
+    }
+} 

@@ -1,13 +1,27 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/uaifood
+    url: jdbc:mysql://localhost:3307/uaifood_orders?allowPublicKeyRetrieval=true&useSSL=false
     username: admin
     password: admin
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
+        format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
-    show-sql: true
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+server:
+  port: 8082
+
+logging:
+  level:
+    root: INFO
+    br.edu.uaifood.orders: DEBUG

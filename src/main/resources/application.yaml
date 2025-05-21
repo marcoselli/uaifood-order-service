@@ -1,10 +1,30 @@
 spring:
   application:
-    name: UaiFood Orders
-  jackson:
-    property-naming-strategy: SNAKE_CASE
-    serialization:
-      fail-on-empty-beans: false
-      write-dates-as-timestamps: true
-    deserialization:
-      fail-on-unknown-properties: false
+    name: uaifood-order-service
+  datasource:
+    url: jdbc:mysql://mysql:3306/uaifood_orders
+    username: admin
+    password: admin
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+
+server:
+  port: 8082
+
+logging:
+  level:
+    br.edu.uaifood.orders: DEBUG
+    org.springframework.amqp: INFO
+    org.hibernate.SQL: DEBUG

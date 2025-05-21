@@ -1,31 +1,52 @@
 package br.edu.uaifood.orders.controller.order.dto
 
-import br.edu.uaifood.orders.controller.product.dto.ProductResponse
-import br.edu.uaifood.orders.domain.Order
-import br.edu.uaifood.orders.domain.OrderStatus
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
-
+import br.edu.uaifood.orders.domain.model.Order
+import br.edu.uaifood.orders.domain.model.OrderItem
+import br.edu.uaifood.orders.domain.model.OrderStatus
+import java.util.UUID
 
 data class OrderResponse(
-    var orderId: Long? = null,
-    var products: List<ProductResponse> = emptyList(),
-    var status: OrderStatus,
-    var creationDate: String
+    val id: UUID,
+    val customerId: String,
+    val restaurantId: String,
+    val items: List<OrderItemResponse>,
+    val status: OrderStatus,
+    val totalAmount: Double,
+    val createdAt: String,
+    val updatedAt: String
 ) {
     companion object {
-        fun from(orderPersisted: OrderEntity): OrderResponse =
-            OrderResponse(
-                orderId = orderPersisted.id,
-                products = orderPersisted.products.map { ProductResponse.from(it) },
-                status = orderPersisted.status,
-                creationDate = orderPersisted.creationDate.toString()
-            )
-
         fun from(order: Order): OrderResponse =
             OrderResponse(
-                products = order.products.map { ProductResponse.from(it) },
+                id = order.id,
+                customerId = order.customerId,
+                restaurantId = order.restaurantId,
+                items = order.items.map { OrderItemResponse.from(it) },
                 status = order.status,
-                creationDate = order.creationDate.toString()
+                totalAmount = order.totalAmount,
+                createdAt = order.createdAt.toString(),
+                updatedAt = order.updatedAt.toString()
             )
     }
 }
+
+data class OrderItemResponse(
+    val id: UUID,
+    val productId: UUID,
+    val quantity: Int,
+    val price: Double,
+    val subtotal: Double
+) {
+    companion object {
+        fun from(item: OrderItem): OrderItemResponse =
+            OrderItemResponse(
+                id = item.id,
+                productId = item.productId,
+                quantity = item.quantity,
+                price = item.price,
+                subtotal = item.calculateSubtotal()
+            )
+    }
+}
+
+

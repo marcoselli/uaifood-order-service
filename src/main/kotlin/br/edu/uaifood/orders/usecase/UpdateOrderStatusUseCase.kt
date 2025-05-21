@@ -1,33 +1,46 @@
 package br.edu.uaifood.orders.usecase
 
-
-import br.edu.uaifood.orders.domain.Order
+import br.edu.uaifood.orders.domain.model.Order
+import br.edu.uaifood.orders.domain.repository.OrderRepository
+import br.edu.uaifood.orders.event.OrderEventPublisher
+import br.edu.uaifood.orders.event.dto.OrderStatusChangedEvent
+import br.edu.uaifood.orders.exception.OrderAlreadyFinishedException
 import br.edu.uaifood.orders.exception.OrderNotFoundException
-import br.edu.uaifood.orders.repository.order.OrderRepository
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import kotlin.jvm.optionals.getOrNull
+import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Component
 class UpdateOrderStatusUseCase(
-    private val repository: OrderRepository
+    private val orderRepository: OrderRepository,
+    private val eventPublisher: OrderEventPublisher
 ) {
 
     private val logger = LoggerFactory.getLogger(this.javaClass)
 
-    fun execute(orderId: Long) {
-        runCatching {
-            val orderPersisted = repository.findById(orderId).getOrNull() ?: throw OrderNotFoundException(orderId)
-            val order = Order.from(orderPersisted)
-            order.nextStatus()
-            repository.save(OrderEntity.from(order, orderPersisted.id))
-        }.onSuccess {
-            logger.info("Order id $orderId status updated successfully")
-        }.onFailure {
-
-            logger.error("Fail to update order $orderId status - ${it.message}")
-            throw it
+    @Transactional
+    fun execute(orderId: UUID) {
+        val order = orderRepository.findById(orderId).orElseThrow {
+            OrderNotFoundException("Order not found with id: $orderId")
         }
+
+        if (!order.canBeUpdated()) {
+            throw OrderAlreadyFinishedException("Order is already in a final status")
+        }
+
+        val oldStatus = order.status
+        order.nextStatus()
+        val updatedOrder = orderRepository.save(order)
+
+        eventPublisher.publishOrderStatusChanged(
+            OrderStatusChangedEvent(
+                orderId = updatedOrder.id,
+                oldStatus = oldStatus,
+                newStatus = updatedOrder.status
+            )
+        )
+
+            logger.info("Order id $orderId status updated successfully")
     }
 }

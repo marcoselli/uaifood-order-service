@@ -1,73 +1,127 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-	kotlin("jvm") version "1.9.25"
-	kotlin("plugin.spring") version "1.9.25"
-	id("org.springframework.boot") version "3.4.4"
-	id("io.spring.dependency-management") version "1.1.7"
-	id("jacoco")
+    id("org.springframework.boot") version "3.2.3"
+    id("io.spring.dependency-management") version "1.1.4"
+    kotlin("jvm") version "1.9.22"
+    kotlin("plugin.spring") version "1.9.22"
+    kotlin("plugin.jpa") version "1.9.22"
+    kotlin("kapt") version "1.9.22"
+    jacoco
 }
 
 group = "br.edu.uaifood"
 version = "0.0.1-SNAPSHOT"
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 repositories {
-	mavenCentral()
+    mavenCentral()
 }
 
 dependencies {
-	implementation("mysql:mysql-connector-java:8.0.33")
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.0.2")
-	implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.0")
-	implementation("org.springframework.boot:spring-boot-starter-web")
-	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	implementation("org.jetbrains.kotlin:kotlin-reflect")
+    // Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-	testImplementation("org.springframework.boot:spring-boot-starter-test")
-	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-	testImplementation("io.github.glytching:junit-extensions:2.6.0")
-	testImplementation("com.ninja-squad:springmockk:4.0.2")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-	testRuntimeOnly("com.h2database:h2:2.3.232")
+    // Kotlin
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+
+    // Database
+    runtimeOnly("com.mysql:mysql-connector-j")
+    testRuntimeOnly("com.h2database:h2")
+
+    // Documentation
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
+
+    // Monitoring
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
+
+    // Test
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.amqp:spring-rabbit-test")
+    testImplementation("org.testcontainers:mysql:1.19.3")
+    testImplementation("org.testcontainers:rabbitmq:1.19.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.3")
+    testImplementation("io.mockk:mockk:1.13.9")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+
+    // Test dependencies
+    testImplementation("io.cucumber:cucumber-java:7.15.0")
+    testImplementation("io.cucumber:cucumber-junit:7.15.0")
+
+    // Kafka
+    implementation("org.springframework.kafka:spring-kafka")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
 }
 
-kotlin {
-	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict")
-	}
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions {
+        freeCompilerArgs = listOf("-Xjsr305=strict")
+        jvmTarget = "17"
+    }
 }
 
 tasks.withType<Test> {
-	useJUnitPlatform()
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }
 
+tasks.withType<JavaCompile> {
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+}
+
+tasks.bootJar {
+    archiveFileName.set("app.jar")
+}
+
+tasks.jar {
+    enabled = false
+}
+
+// JaCoCo configuration
 jacoco {
-	toolVersion = "0.8.12"
+    toolVersion = "0.8.11"
+}
+
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport)
 }
 
 tasks.jacocoTestReport {
-	dependsOn(tasks.test)
-	reports {
-		xml.required.set(true)
-		html.required.set(true)
-	}
-	classDirectories.setFrom(
-		files(
-			classDirectories.files.map {
-				fileTree(it) {
-					exclude(
-						"br/edu/uaifood/orders/config/**",
-						"br/edu/uaifood/orders/util/**",
-						"br/edu/uaifood/orders/exception/**",
-						"br/edu/uaifood/orders/UaiFoodOrdersApplication**"
-					)
-				}
-			}
-		)
-	)
+    dependsOn(tasks.test)
+    
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.test {
+    finalizedBy(tasks.jacocoTestCoverageVerification)
 }

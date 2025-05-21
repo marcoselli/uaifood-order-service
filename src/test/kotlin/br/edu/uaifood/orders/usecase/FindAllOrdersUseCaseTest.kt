@@ -1,50 +1,75 @@
 package br.edu.uaifood.orders.usecase
 
-
-import br.edu.uaifood.orders.domain.OrderStatus
-import br.edu.uaifood.orders.repository.order.OrderRepository
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
-import br.edu.uaifood.orders.repository.product.entity.ProductEntity
-import br.edu.uaifood.orders.service.OrderService
-import io.github.glytching.junit.extension.random.Random
-import io.github.glytching.junit.extension.random.RandomBeansExtension
+import br.edu.uaifood.orders.domain.model.Order
+import br.edu.uaifood.orders.domain.model.OrderItem
+import br.edu.uaifood.orders.domain.model.OrderStatus
+import br.edu.uaifood.orders.domain.repository.OrderRepository
 import io.mockk.every
 import io.mockk.mockk
-import org.assertj.core.api.AssertionsForClassTypes.assertThat
-import org.junit.jupiter.api.extension.ExtendWith
-import java.time.LocalDateTime.parse
-import kotlin.test.Test
+import io.mockk.verify
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import java.time.LocalDateTime
+import java.util.*
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
-@ExtendWith(RandomBeansExtension::class)
 class FindAllOrdersUseCaseTest {
     private val orderRepository: OrderRepository = mockk()
-    private val findAllOrdersUseCaseImpl = FindAllOrdersUseCase(orderRepository, OrderService())
+    private val findAllOrdersUseCase = FindAllOrdersUseCase(orderRepository)
+
+    private lateinit var order: Order
+    private lateinit var orderItem: OrderItem
+
+    @BeforeEach
+    fun setup() {
+        orderItem = OrderItem(
+            productId = UUID.randomUUID(),
+            quantity = 2,
+            price = 10.0
+        )
+        
+        order = Order(
+            customerId = "customer123",
+            restaurantId = "restaurant456",
+            items = listOf(orderItem),
+            status = OrderStatus.CREATED,
+            totalAmount = 20.0,
+            createdAt = LocalDateTime.now(),
+            updatedAt = LocalDateTime.now()
+        )
+    }
 
     @Test
-    fun `should find all orders`(
-        @Random firstRandomProduct: ProductEntity,
-        @Random secondRandomProduct: ProductEntity
-    ) {
-        //given
-        val firstProduct = firstRandomProduct.copy(category = "DRINK")
-        val secondProduct = secondRandomProduct.copy(category = "DESSERT")
-        val firstOrder = OrderEntity(1, listOf(firstProduct),
-            OrderStatus.RECEIVED, parse("2023-06-20T19:34:50.63"), null)
-        val secondOrder = OrderEntity(2, listOf(firstProduct, secondProduct),
-            OrderStatus.IN_PREPARATION, parse("2023-12-23T07:12:10.02"), "910.933.630-37")
+    fun `should return all orders`() {
+        // Given
+        val order1 = order.copy(id = UUID.randomUUID())
+        val order2 = order.copy(id = UUID.randomUUID())
+        val order3 = order.copy(id = UUID.randomUUID())
+        
+        every { orderRepository.findAll() } returns listOf(order1, order2, order3)
 
-        every { orderRepository.findAll() } returns listOf(firstOrder, secondOrder)
+        // When
+        val result = findAllOrdersUseCase.execute()
 
-        //when
-        val orders = findAllOrdersUseCaseImpl.execute()
+        // Then
+        assertEquals(3, result.size)
+        assertTrue(result.contains(order1))
+        assertTrue(result.contains(order2))
+        assertTrue(result.contains(order3))
+        verify { orderRepository.findAll() }
+    }
 
-        //then
-        assertThat(orders[0].status).isEqualTo(OrderStatus.IN_PREPARATION)
-        assertThat(orders[0].products.size).isEqualTo(2)
-        assertThat(orders[0].products[0].name).isEqualTo(firstRandomProduct.name)
-        assertThat(orders[0].products[1].name).isEqualTo(secondRandomProduct.name)
-        assertThat(orders[1].status).isEqualTo(OrderStatus.RECEIVED)
-        assertThat(orders[1].products.size).isEqualTo(1)
-        assertThat(orders[1].products[0].name).isEqualTo(firstRandomProduct.name)
+    @Test
+    fun `should return empty list when no orders exist`() {
+        // Given
+        every { orderRepository.findAll() } returns emptyList()
+
+        // When
+        val result = findAllOrdersUseCase.execute()
+
+        // Then
+        assertTrue(result.isEmpty())
+        verify { orderRepository.findAll() }
     }
 }

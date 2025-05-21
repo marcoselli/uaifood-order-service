@@ -1,34 +1,52 @@
 package br.edu.uaifood.orders.repository.payment.entity
 
-import Payment
-import PaymentStatus
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
+import br.edu.uaifood.orders.domain.Payment
+import br.edu.uaifood.orders.domain.PaymentStatus
 import jakarta.persistence.*
+import java.util.UUID
 
-@Entity(name = "payment")
-data class PaymentEntity (
+@Entity
+@Table(name = "payments")
+data class PaymentEntity(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Long?,
-    val paymentId: String?, // ID gerado pelo sistema de pagamento (e.g., Mercado Pago)
+    @GeneratedValue(strategy = GenerationType.UUID)
+    val id: UUID = UUID.randomUUID(),
+
+    @Column(nullable = false)
+    val orderId: UUID,
+
     @Enumerated(EnumType.STRING)
-    var status: PaymentStatus, // Status do pagamento (e.g., PENDING, APPROVED)
-    var qrCode: String?, // Método de pagamento (e.g., CREDIT_CARD, PIX)
-    val amount: Double, // Valor do pagamento
-    @OneToOne
-    @JoinColumn(name = "order_id", nullable = false)
-    var order: OrderEntity? = null // Relacionamento com o pedido
-){
+    @Column(nullable = false)
+    val status: PaymentStatus,
+
+    @Column
+    val paymentId: String? = null,
+
+    @Column(nullable = false)
+    val amount: Double,
+
+    @Column
+    val qrCode: String? = null
+) {
     companion object {
-        fun from(payment: Payment): PaymentEntity {
-            return PaymentEntity(
-                id = null,
+        fun from(payment: Payment): PaymentEntity =
+            PaymentEntity(
+                id = payment.id,
+                orderId = payment.orderId,
                 status = payment.status,
-                qrCode = payment.qrCode,
-                amount = payment.amount,
                 paymentId = payment.paymentId,
-                order = null
+                amount = payment.amount,
+                qrCode = payment.qrCode
             )
-        }
     }
+
+    fun toDomain(): Payment =
+        Payment(
+            id = id,
+            orderId = orderId,
+            status = status,
+            paymentId = paymentId,
+            amount = amount,
+            qrCode = qrCode
+        )
 }

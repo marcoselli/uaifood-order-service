@@ -1,16 +1,10 @@
-FROM gradle:8.10.2-jdk21-alpine AS build
+FROM gradle:8.5-jdk17 AS build
 WORKDIR /app
+COPY . .
+RUN gradle clean build --no-daemon
 
-COPY build.gradle.kts settings.gradle.kts ./
-COPY src src
-
-RUN gradle clean build
-
-FROM openjdk:21-slim
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-
-COPY --from=build /app/build/libs/*SNAPSHOT.jar uaifood.jar
-
-EXPOSE 8080
-
-ENTRYPOINT ["java", "-jar", "uaifood.jar"]
+COPY --from=build /app/build/libs/*.jar app.jar
+EXPOSE 8081
+ENTRYPOINT ["java", "-jar", "app.jar"]

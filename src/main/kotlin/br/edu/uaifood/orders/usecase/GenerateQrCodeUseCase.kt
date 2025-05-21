@@ -1,9 +1,9 @@
 package br.edu.uaifood.orders.usecase
 
-import br.edu.uaifood.orders.repository.order.entity.OrderEntity
+import br.edu.uaifood.orders.domain.model.Order
 import org.springframework.stereotype.Component
 
 @Component
 class GenerateQrCodeUseCase {
-     fun execute(orderPersisted: OrderEntity): String = "qrFake"
+    fun execute(order: Order): String = "qrFake"
 }

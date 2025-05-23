@@ -14,7 +14,7 @@ Serviço responsável pelo gerenciamento de pedidos do sistema UaiFood, permitin
 
 ## 📋 Pré-requisitos
 
-- JDK 17
+- JDK 21
 - Docker e Docker Compose
 - Gradle (opcional, o projeto usa o wrapper)
 
